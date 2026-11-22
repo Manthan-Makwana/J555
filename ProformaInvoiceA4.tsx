@@ -257,12 +257,9 @@ function paginateItems(items: InvoiceItem[]): PageSlice[] {
   const INTERMEDIATE_CAP = 18;
 
   // For 9 to 20 items (2 pages total):
+  // Fill Page 1 with up to 13 items first, then put the rest on Page 2
   if (items.length <= PAGE_1_CAP + FINAL_PAGE_CAP) {
-    const finalPageCount = Math.min(
-      FINAL_PAGE_CAP,
-      Math.max(3, Math.ceil(items.length * 0.38))
-    );
-    const page1Count = items.length - finalPageCount;
+    const page1Count = Math.min(PAGE_1_CAP, items.length - 1);
 
     return [
       {

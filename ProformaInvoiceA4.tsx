@@ -202,18 +202,26 @@ const Eyebrow: React.FC<{ children: React.ReactNode; color?: string }> = ({ chil
   </p>
 );
 
-const DetailRow: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => {
+const DetailRow: React.FC<{ label: string; value?: string | null; compact?: boolean }> = ({
+  label,
+  value,
+  compact = false,
+}) => {
   if (!value) return null;
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1 text-[9px]">
+    <div className={`flex items-baseline justify-between gap-4 text-[9px] ${compact ? 'py-0.5' : 'py-1'}`}>
       <dt className="shrink-0 text-slate-500">{label}</dt>
       <dd className="break-words text-right font-medium tabular-nums text-slate-900">{value}</dd>
     </div>
   );
 };
 
-const SummaryRow: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="flex items-baseline justify-between gap-4 py-1">
+const SummaryRow: React.FC<{ label: string; value: string; compact?: boolean }> = ({
+  label,
+  value,
+  compact = false,
+}) => (
+  <div className={`flex items-baseline justify-between gap-4 ${compact ? 'py-0.5' : 'py-1'}`}>
     <span className="text-slate-500">{label}</span>
     <span className="font-medium tabular-nums text-slate-900">{value}</span>
   </div>
@@ -235,8 +243,8 @@ interface PageSlice {
 }
 
 function paginateItems(items: InvoiceItem[]): PageSlice[] {
-  // If 8 or fewer items, it fits comfortably on a single page with full header, summary & footer
-  if (items.length <= 8) {
+  // If 13 or fewer items, keep all items on a single page with full header, summary & footer!
+  if (items.length <= 13) {
     return [
       {
         pageIndex: 0,
@@ -248,42 +256,19 @@ function paginateItems(items: InvoiceItem[]): PageSlice[] {
     ];
   }
 
-  // Multi-page capacities:
-  // - Page 1 has full header & customer block, but NO summary or footer: fits up to 13 items
-  // - Final page has compact header, summary, and full footer: fits up to 7 items
-  // - Intermediate pages have compact header and no footer: fits up to 18 items
+  // Multi-page capacities (when items > 13):
+  // - Page 1 has 13 items with continuation bar
+  // - Final page has up to 8 items + summary + footer
+  // - Intermediate pages have up to 18 items
   const PAGE_1_CAP = 13;
-  const FINAL_PAGE_CAP = 7;
+  const FINAL_PAGE_CAP = 8;
   const INTERMEDIATE_CAP = 18;
 
-  // For 9 to 20 items (2 pages total):
-  // Fill Page 1 with up to 13 items first, then put the rest on Page 2
-  if (items.length <= PAGE_1_CAP + FINAL_PAGE_CAP) {
-    const page1Count = Math.min(PAGE_1_CAP, items.length - 1);
-
-    return [
-      {
-        pageIndex: 0,
-        items: items.slice(0, page1Count),
-        startItemNumber: 1,
-        isFirst: true,
-        isLast: false,
-      },
-      {
-        pageIndex: 1,
-        items: items.slice(page1Count),
-        startItemNumber: page1Count + 1,
-        isFirst: false,
-        isLast: true,
-      },
-    ];
-  }
-
-  // For 21+ items (3+ pages total):
   const slices: PageSlice[] = [];
   let remaining = [...items];
   let currentStart = 1;
 
+  // Page 1 gets exactly 13 items
   const page1Items = remaining.slice(0, PAGE_1_CAP);
   slices.push({
     pageIndex: 0,
@@ -418,53 +403,64 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
         </div>
       )}
 
-      {pageSlices.map((slice) => (
-        <article
-          key={slice.pageIndex}
-          id={slice.isFirst ? 'printable-proforma' : `printable-proforma-page-${slice.pageIndex + 1}`}
-          className="invoice-page invoice-container mx-auto flex flex-col bg-white text-slate-900 shadow-xl print:shadow-none"
-          style={{
-            width: '210mm',
-            height: '297mm',
-            maxHeight: '297mm',
-            padding: '8mm 12mm 6mm',
-            boxSizing: 'border-box',
-            fontFamily: FONT_STACK,
-          }}
-        >
-          {/* ============================================================== */}
-          {/* 1. HEADER (Full on Page 1, Compact Continuation on later pages) */}
-          {/* ============================================================== */}
-          {slice.isFirst ? (
-            <header className="flex items-start justify-between gap-10 pb-3.5">
-              <div className="min-w-0 flex-1">
-                {store.logoUrl && (
-                  <img
-                    src={store.logoUrl}
-                    alt={storeName}
-                    className="mb-2.5 block h-auto w-auto max-h-[20mm] max-w-[70mm] object-contain object-left"
-                  />
-                )}
-                <h1 className="text-[15px] font-semibold uppercase tracking-tight text-slate-950">
-                  {storeName}
-                </h1>
-                {storeLocation && (
-                  <p className="mt-0.5 text-[9px] leading-relaxed text-slate-600">{storeLocation}</p>
-                )}
-                {contactLine && <p className="mt-0.5 text-[9px] text-slate-600">{contactLine}</p>}
-                {taxLine && <p className="mt-0.5 text-[8.5px] tabular-nums text-slate-500">{taxLine}</p>}
-              </div>
+      {pageSlices.map((slice) => {
+        const isSingleDensePage = slice.isFirst && slice.isLast && slice.items.length > 8;
 
-              <div className="shrink-0 text-right">
-                <h2 className="text-[26px] font-light leading-none tracking-tight text-slate-950">
-                  {docTitle}
-                </h2>
-                <p className="mt-1.5 font-mono text-[9.5px] tabular-nums text-slate-600">
-                  No. {invoice.invoiceNumber}
-                </p>
-              </div>
-            </header>
-          ) : (
+        return (
+          <article
+            key={slice.pageIndex}
+            id={slice.isFirst ? 'printable-proforma' : `printable-proforma-page-${slice.pageIndex + 1}`}
+            className="invoice-page invoice-container mx-auto flex flex-col bg-white text-slate-900 shadow-xl print:shadow-none"
+            style={{
+              width: '210mm',
+              height: '297mm',
+              maxHeight: '297mm',
+              padding: isSingleDensePage ? '6mm 12mm 4mm' : '8mm 12mm 6mm',
+              boxSizing: 'border-box',
+              fontFamily: FONT_STACK,
+            }}
+          >
+            {/* ============================================================== */}
+            {/* 1. HEADER (Full on Page 1, Compact Continuation on later pages) */}
+            {/* ============================================================== */}
+            {slice.isFirst ? (
+              <header className={`flex items-start justify-between gap-10 ${isSingleDensePage ? 'pb-2' : 'pb-3.5'}`}>
+                <div className="min-w-0 flex-1">
+                  {store.logoUrl && (
+                    <img
+                      src={store.logoUrl}
+                      alt={storeName}
+                      className={
+                        isSingleDensePage
+                          ? 'mb-1.5 block h-auto w-auto max-h-[14mm] max-w-[65mm] object-contain object-left'
+                          : 'mb-2.5 block h-auto w-auto max-h-[20mm] max-w-[70mm] object-contain object-left'
+                      }
+                    />
+                  )}
+                  <h1 className="text-[15px] font-semibold uppercase tracking-tight text-slate-950">
+                    {storeName}
+                  </h1>
+                  {storeLocation && (
+                    <p className="mt-0.5 text-[9px] leading-relaxed text-slate-600">{storeLocation}</p>
+                  )}
+                  {contactLine && <p className="mt-0.5 text-[9px] text-slate-600">{contactLine}</p>}
+                  {taxLine && <p className="mt-0.5 text-[8.5px] tabular-nums text-slate-500">{taxLine}</p>}
+                </div>
+
+                <div className="shrink-0 text-right">
+                  <h2
+                    className={`${
+                      isSingleDensePage ? 'text-[22px]' : 'text-[26px]'
+                    } font-light leading-none tracking-tight text-slate-950`}
+                  >
+                    {docTitle}
+                  </h2>
+                  <p className="mt-1.5 font-mono text-[9.5px] tabular-nums text-slate-600">
+                    No. {invoice.invoiceNumber}
+                  </p>
+                </div>
+              </header>
+            ) : (
             <header
               className="flex items-center justify-between border-b pb-2 mb-2.5"
               style={{ borderColor: palette.primary }}
@@ -499,7 +495,7 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
           {/* ============================================================== */}
           {slice.isFirst && (
             <section
-              className="grid grid-cols-4 gap-x-8 border-y py-2.5"
+              className={`grid grid-cols-4 gap-x-8 border-y ${isSingleDensePage ? 'py-1.5' : 'py-2.5'}`}
               style={{ borderColor: palette.borderLight }}
             >
               {metaItems.map((meta) => (
@@ -517,7 +513,7 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
           {/* 3. PARTIES (Page 1 only)                                       */}
           {/* ============================================================== */}
           {slice.isFirst && (
-            <section className="grid gap-8 py-3" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
+            <section className={`grid gap-8 ${isSingleDensePage ? 'py-1.5' : 'py-3'}`} style={{ gridTemplateColumns: '1.2fr 1fr' }}>
               <div>
                 <Eyebrow color={palette.primary}>Billed to</Eyebrow>
                 <h3 className="mt-1 text-[12px] font-semibold uppercase tracking-tight text-slate-950">
@@ -536,10 +532,10 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
               <div>
                 <Eyebrow>Customer details</Eyebrow>
                 <dl className="mt-1 divide-y divide-slate-200">
-                  <DetailRow label="GSTIN" value={invoice.customer.gstin} />
-                  <DetailRow label="Phone" value={invoice.customer.phone} />
-                  <DetailRow label="Email" value={invoice.customer.email} />
-                  <DetailRow label="Payment terms" value={invoice.paymentTerms} />
+                  <DetailRow label="GSTIN" value={invoice.customer.gstin} compact={isSingleDensePage} />
+                  <DetailRow label="Phone" value={invoice.customer.phone} compact={isSingleDensePage} />
+                  <DetailRow label="Email" value={invoice.customer.email} compact={isSingleDensePage} />
+                  <DetailRow label="Payment terms" value={invoice.paymentTerms} compact={isSingleDensePage} />
                 </dl>
               </div>
             </section>
@@ -564,12 +560,12 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
                   className="border-b text-[8px] font-semibold uppercase tracking-[0.14em] text-slate-500"
                   style={{ borderColor: palette.primary }}
                 >
-                  <th className="py-2 pr-2 text-left font-semibold">No.</th>
-                  <th className="px-2 py-2 text-left font-semibold">Description</th>
-                  <th className="px-2 py-2 text-center font-semibold">HSN / SAC</th>
-                  <th className="px-2 py-2 text-right font-semibold">Qty</th>
-                  <th className="px-2 py-2 text-right font-semibold">Rate (₹)</th>
-                  <th className="py-2 pl-2 text-right font-semibold">Amount (₹)</th>
+                  <th className={`pr-2 text-left font-semibold ${isSingleDensePage ? 'py-1' : 'py-2'}`}>No.</th>
+                  <th className={`px-2 text-left font-semibold ${isSingleDensePage ? 'py-1' : 'py-2'}`}>Description</th>
+                  <th className={`px-2 text-center font-semibold ${isSingleDensePage ? 'py-1' : 'py-2'}`}>HSN / SAC</th>
+                  <th className={`px-2 text-right font-semibold ${isSingleDensePage ? 'py-1' : 'py-2'}`}>Qty</th>
+                  <th className={`px-2 text-right font-semibold ${isSingleDensePage ? 'py-1' : 'py-2'}`}>Rate (₹)</th>
+                  <th className={`pl-2 text-right font-semibold ${isSingleDensePage ? 'py-1' : 'py-2'}`}>Amount (₹)</th>
                 </tr>
               </thead>
 
@@ -595,26 +591,26 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
 
                     return (
                       <tr key={item.id || itemNumber} className="border-b border-slate-200 align-top">
-                        <td className="py-2 pr-2 text-[8.5px] tabular-nums text-slate-400">
+                        <td className={`pr-2 text-[8.5px] tabular-nums text-slate-400 ${isSingleDensePage ? 'py-1' : 'py-2'}`}>
                           {String(itemNumber).padStart(2, '0')}
                         </td>
-                        <td className="px-2 py-2">
+                        <td className={`px-2 ${isSingleDensePage ? 'py-1' : 'py-2'}`}>
                           <p className="font-semibold leading-snug text-slate-900">
                             {sanitizeText(item.productName)}
                           </p>
                           {meta && <p className="mt-0.5 text-[8.5px] text-slate-500">{meta}</p>}
                         </td>
-                        <td className="px-2 py-2 text-center text-[8.5px] tabular-nums text-slate-600">
+                        <td className={`px-2 text-center text-[8.5px] tabular-nums text-slate-600 ${isSingleDensePage ? 'py-1' : 'py-2'}`}>
                           {item.hsnCode || '—'}
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+                        <td className={`px-2 text-right tabular-nums text-slate-800 ${isSingleDensePage ? 'py-1' : 'py-2'}`}>
                           {quantity.toFixed(2)}
                           <span className="ml-1 text-[8px] text-slate-500">{item.unit || 'Pcs'}</span>
                         </td>
-                        <td className="px-2 py-2 text-right tabular-nums text-slate-700">
+                        <td className={`px-2 text-right tabular-nums text-slate-700 ${isSingleDensePage ? 'py-1' : 'py-2'}`}>
                           {formatNumber(unitPrice)}
                         </td>
-                        <td className="py-2 pl-2 text-right font-semibold tabular-nums text-slate-900">
+                        <td className={`pl-2 text-right font-semibold tabular-nums text-slate-900 ${isSingleDensePage ? 'py-1' : 'py-2'}`}>
                           {formatNumber(lineTotal)}
                         </td>
                       </tr>
@@ -646,7 +642,7 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
           {slice.isLast && (
             <>
               {/* 5. SUMMARY */}
-              <section className="mt-3.5 grid gap-8" style={{ gridTemplateColumns: '1fr 74mm' }}>
+              <section className={`grid gap-8 ${isSingleDensePage ? 'mt-2' : 'mt-3.5'}`} style={{ gridTemplateColumns: '1fr 74mm' }}>
                 <div>
                   <Eyebrow>Amount in words</Eyebrow>
                   <p className="mt-1 text-[9.5px] font-medium leading-relaxed text-slate-800">
@@ -655,16 +651,17 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
                 </div>
 
                 <div className="text-[9.5px]">
-                  <SummaryRow label="Subtotal" value={`₹ ${formatNumber(subtotal)}`} />
+                  <SummaryRow label="Subtotal" value={`₹ ${formatNumber(subtotal)}`} compact={isSingleDensePage} />
                   {discount > 0 && (
                     <SummaryRow
                       label={`Discount (${discountPct.toFixed(1)}%)`}
                       value={`− ₹ ${formatNumber(discount)}`}
+                      compact={isSingleDensePage}
                     />
                   )}
 
                   <div
-                    className="mt-2 flex items-baseline justify-between border-t-2 pt-2"
+                    className={`flex items-baseline justify-between border-t-2 ${isSingleDensePage ? 'mt-1.5 pt-1.5' : 'mt-2 pt-2'}`}
                     style={{ borderColor: palette.primary }}
                   >
                     <span
@@ -684,7 +681,7 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
               </section>
 
               {/* 6. FOOTER */}
-              <footer className="mt-3.5 pt-2">
+              <footer className={isSingleDensePage ? 'mt-2 pt-1' : 'mt-3.5 pt-2'}>
                 <div className="grid gap-8" style={{ gridTemplateColumns: '1fr 74mm' }}>
                   <div>
                     {hasPaymentDetails && (
@@ -692,10 +689,10 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
                         <Eyebrow color={palette.primary}>Payment details</Eyebrow>
                         <div className="mt-1 flex items-start justify-between gap-4">
                           <dl className="flex-1 divide-y divide-slate-200">
-                            <DetailRow label="Bank" value={store.bankName} />
-                            <DetailRow label="Account no." value={store.accountNumber} />
-                            <DetailRow label="IFSC" value={store.ifscCode} />
-                            <DetailRow label="UPI ID" value={cleanUpi} />
+                            <DetailRow label="Bank" value={store.bankName} compact={isSingleDensePage} />
+                            <DetailRow label="Account no." value={store.accountNumber} compact={isSingleDensePage} />
+                            <DetailRow label="IFSC" value={store.ifscCode} compact={isSingleDensePage} />
+                            <DetailRow label="UPI ID" value={cleanUpi} compact={isSingleDensePage} />
                           </dl>
 
                           {qrImageUrl && (
@@ -703,7 +700,7 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
                               <img
                                 src={qrImageUrl}
                                 alt="Scan to pay via UPI"
-                                className="h-[20mm] w-[20mm]"
+                                className={isSingleDensePage ? "h-[16mm] w-[16mm]" : "h-[20mm] w-[20mm]"}
                               />
                               <p className="mt-0.5 text-[7px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                                 Scan to pay
@@ -717,12 +714,12 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
 
                   <div className="flex flex-col items-end justify-end text-right">
                     <p className="text-[9.5px] font-semibold text-slate-900">For {storeName}</p>
-                    <div className="mt-8 w-full border-t border-slate-400" />
+                    <div className={isSingleDensePage ? "mt-4 w-full border-t border-slate-400" : "mt-8 w-full border-t border-slate-400"} />
                     <p className="mt-1 text-[8.5px] text-slate-600">Authorised signatory</p>
                   </div>
                 </div>
 
-                <div className="mt-2.5 border-t pt-1.5" style={{ borderColor: palette.borderLight }}>
+                <div className={`border-t ${isSingleDensePage ? 'mt-1.5 pt-1' : 'mt-2.5 pt-1.5'}`} style={{ borderColor: palette.borderLight }}>
                   <Eyebrow color={palette.primary}>Terms & conditions</Eyebrow>
                   <p className="mt-0.5 whitespace-pre-line text-[7.5px] leading-relaxed text-slate-600">
                     {terms}
@@ -732,7 +729,7 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
 
               {/* Push bottom courtesy line cleanly to the bottom */}
               <div className="mt-auto" />
-              <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-1.5 text-[7.5px] text-slate-500">
+              <div className={`flex items-center justify-between border-t border-slate-200 text-[7.5px] text-slate-500 ${isSingleDensePage ? 'mt-1 pt-1' : 'mt-2 pt-1.5'}`}>
                 <span>{footerText}</span>
                 <span className="tabular-nums">
                   {totalPages > 1 ? `Page ${totalPages} of ${totalPages} · ` : ''}E. &amp; O.E.
@@ -741,7 +738,8 @@ export const ProformaInvoiceA4: React.FC<ProformaInvoiceA4Props> = ({
             </>
           )}
         </article>
-      ))}
+      );
+    })}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');

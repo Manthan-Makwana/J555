@@ -248,37 +248,45 @@ function paginateItems(items: InvoiceItem[]): PageSlice[] {
     ];
   }
 
-  const PAGE_1_CAP = 10;
-  const FINAL_PAGE_CAP = 8;
-  const INTERMEDIATE_CAP = 16;
+  // Multi-page capacities:
+  // - Page 1 has full header & customer block, but NO summary or footer: fits up to 13 items
+  // - Final page has compact header, summary, and full footer: fits up to 7 items
+  // - Intermediate pages have compact header and no footer: fits up to 18 items
+  const PAGE_1_CAP = 13;
+  const FINAL_PAGE_CAP = 7;
+  const INTERMEDIATE_CAP = 18;
 
+  // For 9 to 20 items (2 pages total):
+  if (items.length <= PAGE_1_CAP + FINAL_PAGE_CAP) {
+    const finalPageCount = Math.min(
+      FINAL_PAGE_CAP,
+      Math.max(3, Math.ceil(items.length * 0.38))
+    );
+    const page1Count = items.length - finalPageCount;
+
+    return [
+      {
+        pageIndex: 0,
+        items: items.slice(0, page1Count),
+        startItemNumber: 1,
+        isFirst: true,
+        isLast: false,
+      },
+      {
+        pageIndex: 1,
+        items: items.slice(page1Count),
+        startItemNumber: page1Count + 1,
+        isFirst: false,
+        isLast: true,
+      },
+    ];
+  }
+
+  // For 21+ items (3+ pages total):
   const slices: PageSlice[] = [];
   let remaining = [...items];
   let currentStart = 1;
 
-  // For 9 to 18 items, balance evenly across 2 pages
-  if (items.length <= PAGE_1_CAP + FINAL_PAGE_CAP) {
-    const page1Count = Math.ceil(items.length / 2);
-    const page1Items = remaining.slice(0, page1Count);
-    slices.push({
-      pageIndex: 0,
-      items: page1Items,
-      startItemNumber: 1,
-      isFirst: true,
-      isLast: false,
-    });
-    const page2Items = remaining.slice(page1Count);
-    slices.push({
-      pageIndex: 1,
-      items: page2Items,
-      startItemNumber: 1 + page1Count,
-      isFirst: false,
-      isLast: true,
-    });
-    return slices;
-  }
-
-  // For 19+ items (3+ pages)
   const page1Items = remaining.slice(0, PAGE_1_CAP);
   slices.push({
     pageIndex: 0,
